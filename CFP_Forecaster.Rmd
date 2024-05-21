@@ -1,0 +1,909 @@
+---
+title: "Final Project: Progress Report"
+author: "Sai Vivek Chava"
+date: "`r Sys.Date()`"
+
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: flatly
+---
+
+# Overview
+
+
+```{r document_setup, echo=F, message=F, warning=F}
+# This chunk can include things you need for the rest of the document
+library('ggplot2') ## most of the time you will need ggplot
+theme_set(theme_bw()) # change the default ggplot theme to black-and-white
+
+knitr::opts_chunk$set(
+  echo=T, ## show your R code chunk
+  message = F, ## hide the message
+  warning = F, ## hide the warning
+  autodep = T ## make sure your separate code chunks can find the dependencies (from other code chunk)
+)
+```
+
+# 1. Extended abstract 
+
+Determining ones carbon footprint enables every individual to identify areas for carbon reduction, typically related to energy and transportation. Elevated emissions of greenhouse gases are often linked to inefficiencies such as excessive energy use.The objective of this project is to create an accurate and user-friendly machine learning model to calculate the carbon footprint of routine activities. A dataset of human activities and the accompanying carbon footprint measurements will be used to train the model. To choose the machine learning algorithm that produces the most accurate predictions, we will compare a number of them. The model will also be made to offer users with information on the activities that have a major impact on their carbon footprint, enabling them to make decisions that will lead to a more sustainable way of living.
+
+Unquestionably, climate change is a serious worldwide issue. The main cause of climate change is greenhouse gas emissions from human activity, and mitigating measures depend heavily on our knowledge of our individual and societal carbon footprints. Current carbon footprint calculators lack customization and frequently operate under general assumptions. In order to close this gap, our project is creating a model that uses personal data to produce a more precise and useful carbon footprint estimate.
+
+We plan on taking the below approach:
+
+a. Obtaining and Preparing Data:
+
+The data that we are going to be using for this project is available on Kaggle(https://www.kaggle.com/datasets/dumanmesut/individual-carbon-footprint-calculation). We will be exploring this data thoroughly and make sure data preprocessing is done to ensure that missing values, if any are handeled and potentially incorporate data cleaning techniques for accuracy. 
+
+b. Feature Engineering:
+
+We'll identify characteristics that are important for estimating carbon footprints, such as modes of transportation, food preferences, energy usage patterns, and product life cycles. We aim to employ Multi Factor Analysis(MFA) and Factor Analysis of Mixed Data (FAMD) to identify the top contributors and least contributors and fit models based on the obtained results and compare their performance.
+
+c. Train the model and compare:
+
+A variety of machine learning regression models, including Support Vector Regression (SVR), Random Forest Regression, and Linear Regression, will be trained and compared. We also aim to train complex models like Neural Networks and compare the results with the baseline models. This enables us to select the feature-based model that most accurately predicts carbon footprint.
+
+d. Analyzing and Interpreting the Model:
+
+Metrics like mean squared error (MSE) and R-squared will be used to analyze the model's performance and determine how accurate it is in predicting carbon footprint. To determine which features have a substantial impact on carbon footprint, we will use techniques such as feature importance analysis. This will give users insights into which features to target behavior modifications for the biggest impact.
+
+e. Implementation:
+
+The best-performing model may be hosted via a web application. By entering their daily routines, users of this platform will be able to get estimations of their carbon footprint in real time. A visual breakdown of emissions from various regions may also be displayed on the platform.
+
+
+The data that we are going to be using for this project is available on Kaggle(https://www.kaggle.com/datasets/dumanmesut/individual-carbon-footprint-calculation). This is a publicaly available dataset. 
+
+
+# 2. Preliminary results
+
+```{r}
+## YOUR CODE HERE
+library(tidyverse, tidymodels)
+library(ggplot2)
+```
+
+### Data Preview
+
+```{r}
+data <- readr::read_csv("Carbon Emission.csv", col_names = T, show_col_types = F) %>% as_tibble()
+data %>% glimpse()
+```
+
+```{r}
+visdat::vis_miss(data)
+```
+
+We have over 60% of missing values in Vehicle Type column
+
+```{r}
+visdat::vis_dat(data)
+```
+
+Looks like the data has more categorical columns than numerical columns. It needs to be preprocessed by either one-hot or label encoding in the later sections.
+
+
+### Preprocessing
+
+```{r}
+# renaming columns for ease of representation
+data <- data %>% rename(Body_Type = `Body Type`) %>% rename(Shower_Freq = `How Often Shower`) %>% 
+  rename( Heating_Source = `Heating Energy Source`) %>% rename(Vehicle_Type = `Vehicle Type`) %>% 
+  rename(Social_Activity = `Social Activity`) %>% rename(Grocery_CostPM = `Monthly Grocery Bill`) %>%
+  rename(AirTravel_Freq = `Frequency of Traveling by Air`) %>% rename(Dist_TravelledPM = `Vehicle Monthly Distance Km`) %>%
+  rename( Waste_bag_Size = `Waste Bag Size`) %>% rename(Waste_CountPW = `Waste Bag Weekly Count`) %>%
+  rename(TV_PC_WatchtimePD = `How Long TV PC Daily Hour`) %>% rename(New_Clothes_PM = `How Many New Clothes Monthly`) %>%
+  rename(Internet_TimeH = `How Long Internet Daily Hour`) %>% rename(Energy_Efficiency = `Energy efficiency`)
+
+data %>% glimpse()
+```
+
+```{r}
+# factor(data$Body_Type, levels = c("obese", "overweight", "underweight", "normal"))
+# factor(data$Diet, levels = c("pescatarian", "vegetarian", "omnivore", "vegan"))
+# factor(data$Shower_Freq, levels = c("daily", "less frequently", "more frequently", "twice a day"))
+# factor(data$Heating_Source, levels = c("coal", "natural gas", "wood", "electricity"))
+# factor(data$Social_Activity, levels = c("often", "never", "sometimes"))
+data <- data %>% mutate(Sex = ifelse(Sex == "male", 0, 1))
+# 
+# data <- data %>%
+#   mutate(Waste_bag_Size = recode(Waste_bag_Size, "small" = 1, "medium" = 2, "large" = 3, "extra large" = 4))
+# data <- data %>%
+#   mutate(AirTravel_Freq = recode(AirTravel_Freq, "never" = 0, "rarely" = 1, "frequently" = 2, "very frequently" = 3))
+
+data <- data %>%
+  mutate(Vehicle_Type = ifelse(Transport == "walk/bicycle", "PMM", Vehicle_Type))
+data <- data %>%
+  mutate(Vehicle_Type = ifelse(Transport == "public", "publicTransport", Vehicle_Type))
+```
+
+
+### Exploratory Data Analysis
+
+```{r}
+num_cols <- data %>% select(where(is.numeric))
+
+cat_cols <- data %>% select(where(is.character))
+```
+
+
+```{r}
+num_cols %>% tibble::rowid_to_column() %>% pivot_longer(names(num_cols)) %>% 
+  ggplot(mapping = aes(x=value)) + geom_histogram(bins = 20) +
+  facet_wrap(~name, scales = 'free')
+```
+
+From the plot above, we can observe that, the CarbonEmission data is slightly right skewed and almost a Gaussian distribution and the column DistanceTravelled_PM is heavily right skewed.
+
+The distribution of GroceryCost_PM is almost uniform with slight noise towards the beginning and end of the distribution. The other columns are more discrete values with multi-modal points. So, there’s no distribution shape in particular. We might be able to see any distribution shape with transformation.
+
+
+```{r}
+cat_cols %>% select(-c(Recycling, Cooking_With))  %>% pivot_longer(names(.)) %>% 
+  ggplot(mapping = aes(x=value)) + geom_bar() +
+  facet_wrap(~name, scales = 'free') 
+```
+
+The above plot is of histogram of the categorical variables to see their distribution. As can be seen from the plot above, almost all the variables except Vehicle_Type has similar distributions.
+
+
+```{r}
+options(dlookr_offline = F)
+dlookr::plot_normality(num_cols %>% select(CarbonEmission, Grocery_CostPM, Dist_TravelledPM, Waste_CountPW, TV_PC_WatchtimePD, 
+                                           New_Clothes_PM, Internet_TimeH ))
+```
+The above Normal Diagnosis plot is to see the transformative distributions of the numeral columns.
+
+The original distribution of the CarbinEmission column is a little bit right skewed but the log-transformed distribution looks like a bell-curve. The Grocery_Cost_PM column has approximate uniform distribution for the original values. The log-transformed distribution is left skewed.
+
+The log-transformed values of New_Clothes_PM seems to be left-skewed as well.
+
+The values of other columns are rather discrete, so there’s no identified distribution curves.
+
+```{r}
+data %>%
+  ggplot(mapping = aes(x= Grocery_CostPM, y= New_Clothes_PM,shape = as.factor(Sex) )) +
+  geom_point(aes(color = CarbonEmission), alpha = .75) +
+  geom_smooth() +scale_color_viridis_c() +
+  # scale_shape_manual(values = c(11,13,14,15,16,17)) +
+  facet_wrap(~Body_Type, scales = 'free') + theme_minimal()
+```
+
+
+From the above plot, the objective is to visualize the impact of the Gender(Sex) and the Body_Type corresponding to the CarbonEmission and the expenditure on Grocery and Clothes. Apparently as observed, there’s no distribution pattern in particular. Most of the people with highest emissions are sparsely distributed across all levels of income expenditure range.
+
+It is to be speculated that, while the density of more carbon emissions are observed for people who spent above more than 20-25 on New clothes for the Underweight and Normal categories, The density is high for all the expenditure ranges of Obese and Overweight categories.
+
+```{r}
+data %>% mutate(AirTravel_Freq = recode(AirTravel_Freq, "never" = 0, "rarely" = 1, "frequently" = 2, "very frequently" = 3)) %>%
+  ggplot(mapping = aes(x= Dist_TravelledPM, y= CarbonEmission , shape = Vehicle_Type)) +
+  geom_point(aes(color = AirTravel_Freq), alpha = 0.5) + scale_color_viridis_c() +
+  scale_shape_manual(values = c(11,12, 13,14,15,16,17)) +
+  facet_wrap(~Transport, scales = 'free') + theme_minimal()
+```
+
+The plot above is plotted to see the impact of Distance Travelled on Carbon Emissions corresponding to the Airtravel frequency and Vehicle Type.
+
+It is to be observed that, The density of Carbon emissions are less for people using Electric vehicles and are below 2000. Overall, the emissions for people with private mode of transportation is less compared to the other modes given the density observed in the plot above. Another interesting speculation is that the Airtravel distribution of people with private mode of transportation is linear i.e. as the distance traveled increases, the distribution is also increasing, so does the CarbonEmission.
+
+In contrast to the private mode transportation, people with preferred mode of transportation as public and Walk/bicycle has more carbon emissions irrespective of the distance traveled. An interesting speculation is that, they seem to prefer airtravel more frequently as seen by the density of region highlighted with yellow. It is also to be noted that, while the maximum distance traveled by people with preferred mode of transportation is 10000 whereas distance traveled by people with preferred mode as ‘public’ is less than 2000 and the ‘walk/bicycle’ is 100.
+
+It is also to be noted that the people with public as preferred mode of transport has only VehicleType_publicTransport and people with walk/bike as preferred transport mode has only vehicleType_publicTransport which indicates high correlation among the features.
+
+```{r}
+data %>% mutate(Energy_Efficiency = recode(Energy_Efficiency, "No" = 0, "Sometimes" = 1, "Yes" = 2)) %>%
+  ggplot(mapping = aes(x= TV_PC_WatchtimePD, y= CarbonEmission , shape = Body_Type)) +
+  geom_point(aes(color = Energy_Efficiency), alpha = 0.5) + scale_color_viridis_c() +
+  facet_wrap(~Social_Activity, scales = 'free') + theme_minimal()
+```
+
+The above plot is plotted to identify the impact of TV and PC watch time on the carbonemissions corresponding to the Body type, Social Indulgence and Energy efficiency practicies of people.
+
+It is observed that the irrespective of the social indulgence habits of people, the density of carbon emissions of people ranging between 500 and around 3700. One more interesting speculation is that, across all the levels of social indulgence, the major contributors for the CarbonEmission are Obese and Overweight categories.The contribution of normal and underweight is sparse for over 4000 carbonemissions.
+
+It also to be noted that, while people who claim to save energy are densely distributed for emissions ranging between 500 and 3700, for emissions over 3700, there seems to be approximately similar distribution for all the other categories.
+
+```{r}
+data %>% tibble::rowid_to_column() %>% pivot_longer(c("CarbonEmission", "Dist_TravelledPM")) %>%
+  ggplot(mapping = aes(x = Vehicle_Type, y= value)) +
+  geom_boxplot(aes(fill = as.factor(Sex), color = as.factor(Sex)), alpha = 0.5) +
+  facet_wrap(~name, scales = 'free') + theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The plot helps us understand the distribution of carbon emissions and distance traveled in Kilo Meters based on the vehicle type corresponding to Gender.
+
+As seen in the first plot, Overall the median Carbon emissions for males are higher compared to that of females. It is also observed that the median emissions of petrol vehicles are higher followed by LPG and Diesel. The electric vehicle has the lowest emissions in the powered vehicles. The Lowest emissions are for the people who prefer walking or cycling and public transport with outliers which is also seen in the scatter plot above.
+
+In the second plot, The median distance traveled is more for females and approximately same for all the powered vehicle types across both males and females.
+
+
+```{r}
+data %>% ggplot(mapping = aes(x = Heating_Source, y = CarbonEmission)) + geom_boxplot() + 
+  facet_wrap(Energy_Efficiency~., scales = 'free_y') + theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The above plot helps us identify the impact of Heating sources and the Energy Efficiency habits of people on the carbon emissions.
+
+It is observed that irrespective of the energy efficiency habits of people, the median emissions of coal is higher followed by Wood and Natural gas. The median emissions of electricity is the lowest of all.
+
+
+
+```{r}
+data %>% tibble::rowid_to_column() %>% pivot_longer(c("Grocery_CostPM", "Waste_CountPW", "CarbonEmission")) %>%
+  ggplot(mapping = aes(x = Waste_bag_Size, y= value)) +
+  geom_boxplot() +
+  facet_wrap(~name, scales = 'free') + theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The above boxplots are to visualize the distribution of carbon emissions, Grocer cost, and Waste bag count per week with respect to the Waste bag size.
+
+It is to be noted that as the waste bag size increases, the median emissions are increasing which gives us a hint that there seems to be a linear relationship between them.
+
+The median grocery cost per month is almost similar across all the size ranges and the median wastebag count is also same.
+
+```{r}
+check_str_method <- function(type_list, check_val) {
+  if (check_val %in% unlist(strsplit(gsub("\\[|\\]|'", "", type_list), ", "))) {
+    return(1)
+  } else {
+    return(0)
+  }
+}
+
+# Create new columns based on cooking methods
+data <- data %>%
+  mutate(
+    Cooking_Grill = sapply(Cooking_With, check_str_method, check_val = "Grill"),
+    Cooking_Oven = sapply(Cooking_With, check_str_method, check_val = "Oven"),
+    Cooking_Stove = sapply(Cooking_With, check_str_method, check_val = "Stove"),
+    Cooking_Microwave = sapply(Cooking_With, check_str_method, check_val = "Microwave"),
+    Cooking_Airfryer = sapply(Cooking_With, check_str_method, check_val = "Airfryer")) %>% select(-Cooking_With)
+
+
+data <- data %>%
+  mutate(
+    Recycling_Paper = sapply(Recycling, check_str_method, check_val = "Paper"),
+    Recycling_Plastic = sapply(Recycling, check_str_method, check_val = "Plastic"),
+    Recycling_Glass = sapply(Recycling, check_str_method, check_val = "Glass"),
+    Recycling_Metal = sapply(Recycling, check_str_method, check_val = "Metal")) %>% select(-Recycling)
+```
+
+
+```{r}
+data %>% tibble::rowid_to_column() %>% pivot_longer(c(starts_with('Cooking'), starts_with('Recycling'))) %>%
+  ggplot(mapping = aes(x = CarbonEmission, y = value )) + 
+  geom_point(aes(color = value), alpha = 0.75) + geom_smooth(method = 'glm', color = 'black') +
+  facet_wrap(~name, scales = 'free')
+```
+
+The above is plotted to visualize the relationship between Carbon Emission and the value for different categories related to cooking and recycling. Each facet shows a scatter plot with carbon emission on the x-axis and Cooking type response on the y-axis.
+
+For various cooking methods, there seems to be a positive correlation between them and the carbon emission. If we observe the geomline, the emissions associated are high for people using Airfryer, Grill, Microwave, and Oven. The increase in density can be observed with respect to the increase in the width of the faded region as it moves right of the plot.
+
+Similar to the above cooking methods, there seems to be a direct positive direct relation for people not opting for recycling methods and the carbon footprint. As the plot moves from left to right, the density of people with more carbon foot print increases which can be observed from the increase in the with around the faded region around the regression line. It is to be noted that the Carbon emissions are higher for people who did not opt to recycle paper followed by metals and plastic respectively.
+
+```{r}
+data %>% tibble::rowid_to_column() %>% pivot_longer(c(starts_with('Cooking'))) %>%
+  ggplot(mapping = aes(x = Diet, y = CarbonEmission)) +
+  geom_boxplot(aes(fill = as.factor(value), color = as.factor(value), alpha=0.5 ))  +  facet_wrap(name~., scales = 'free_y') +
+  theme_minimal() +   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The above is plotted to visualize the relationship between Carbon Emission and the value for different categories related to cooking. Each facet shows a box plot with carbon emission on the y-axis and Cooking type response on the x-axis corresponding to the diet.
+
+It is to be noted that there is a slight difference in the median carbon emissions of people using the aforementioned cooking methods and not which is around 2000 with dense spread of outliers for more Carbon emissions. The average median across all the variations is almost similar, so we are not able to find any definitive direct relation between them with this approach.
+
+
+```{r}
+dummy_vars <- caret::dummyVars(~., data = data, fullRank = T)
+data_oh <- predict(dummy_vars, data) %>%as.data.frame()
+data_oh %>% glimpse()
+```
+
+```{r}
+abbreviated_column_names <- c("BT_obese", "BT_overweight", "BT_underweight", "S", "D_pescatarian", "D_vegan", "D_vegetarian",
+    "SF_less_frequent", "SF_more_frequent", "SF_twice_a_day", "HS_electric", "HS_gas", "HS_wood", "T_public", "T_walk_bike",
+    "VT_electric", "VT_hybrid", "VT_lpg", "VT_petrol", "VT_PMM", "VT_public", "SA_often", "SA_sometimes", "GC_PM",
+    "ATF_never", "ATF_rarely", "ATF_very_frequent", "DT_PM", "WB_large", "WB_medium", "WB_small", "WCP",
+    "TPW", "NCP", "IT", "EE_sometimes", "EE_yes", "CG_grill", "CG_oven", "CG_stove", "CG_microwave", "CG_airfryer",
+    "RP_paper", "RP_plastic", "RP_glass", "RP_metal")
+df <- data_oh %>% select(-CarbonEmission)
+colnames(df) <-  abbreviated_column_names
+df %>% cor() %>% corrplot::corrplot(type = 'upper', method = 'square')
+```
+
+The above plot is a correlation plot to visualize the correlation between features and the level of correlation. It can be observed that there are three features with high correlation. VehicleType_PublicTransport and Transport_Public are higly correlated and VehicleType_PMM and Transport_walk/bicycle are higly correlated as indicated by the scatter plot.
+
+Apart from that, there seems to be a high correlation among the people using Cooking methods- Grill and Airfryer. There are also other features with very little correlation.
+
+### Factor Analysis of Mixed Data
+
+```{r}
+library(FactoMineR, factoextra)
+```
+
+```{r}
+mfa_res <- FactoMineR::FAMD(data %>% select(-CarbonEmission), ncp = 26, graph = F)
+```
+
+
+```{r}
+eig_val <- data.frame(mfa_res$eig) %>% tibble::rowid_to_column() %>% rename(Component = rowid)
+eig_val %>% arrange(percentage.of.variance) %>%
+  ggplot(mapping = aes(x= Component, y = percentage.of.variance)) + 
+    geom_text(aes(label = paste0(round(percentage.of.variance, 2), "%")), 
+            vjust = -0.5, size = 3, color = "black") + 
+  geom_bar(stat = 'identity', fill = 'blue') +
+  geom_line(aes(y = percentage.of.variance), color = 'red', size = 1) +
+  labs(x = 'Principal Component', y = 'Variance Explained(%)', title = "Scree Plot for FAMD Eigen Values") +
+  theme_minimal() + 
+     theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Factor Analysis of Mixed data allows us to consider both qualitative and quantitative aspects of the data to group observations and association between all the variables. 
+
+The Scree plot shows how much variance is being explained by each component and apparently three principal components relatively have the major share in explaining the variance in data. 
+
+
+```{r}
+factoextra::fviz_famd_var(mfa_res, repel = T)
+```
+
+
+```{r}
+factoextra::fviz_famd_var(mfa_res, "quanti.var", col.var = "contrib", 
+                          gradient.cols = c("red", "green", "blue"),repel = T)
+```
+
+The variables plot of FAMD helps us understan the similar features and the contributors. It is to be noted that the majority of the features are close to the origin which means there's no significant contribution of these features. The features like Cooking Airfryer/Grill have major contribution for dim2 and Distance travelled per month has major contribution for Dim1. The features such as Vehicle_type and  Transport are towards the top right corner similar to the resultant of both the dimensions, meaning it may contribute equally to both the dimensions
+
+```{r}
+factoextra::fviz_contrib(mfa_res, 'var', axes = 2)
+```
+
+
+```{r}
+factoextra::fviz_contrib(mfa_res, 'var', axes = 3)
+```
+
+The above two plots helps us understand the contribution of each feature to the corresponding dimensions and evidently the Cooking Airfryer/Grill, Vehicle type and Transport seems to be the top contributors. 
+
+```{r}
+sim <- mfa_res$quali.var$cos2[,1]
+mds_result <- data.frame(mfa_res$quali.var$contrib[,1:2])
+mds_result %>% ggplot() +
+  ggrepel::geom_text_repel(aes(label = rownames(mds_result), x = Dim.1, y = Dim.2 , color =sim))
+```
+
+The above plot helps us visualize the similarity between features.  The categories public transport, walk.bicycle and private seem to be more similar to each other than they are to any other. The category Lpg seems to be the most dissimilar to all the other categories. This plot also shows the corresponding contribution based on the position with respect to the dimension.
+
+### Multi-Factor Analysis
+
+```{r}
+# reordering the column names to order them in groups
+data_mfa <- data %>% select("Body_Type", "Diet", "Shower_Freq", "Heating_Source", "Energy_Efficiency", "Transport", "AirTravel_Freq", "Vehicle_Type",  "Waste_bag_Size", "Social_Activity", "Sex", "Grocery_CostPM", "Cooking_Grill", "Cooking_Oven", "Cooking_Stove", "Cooking_Microwave", "Cooking_Airfryer" , "Dist_TravelledPM", "Waste_CountPW", "Recycling_Paper", "Recycling_Plastic", "Recycling_Glass", "Recycling_Metal", "TV_PC_WatchtimePD", "New_Clothes_PM", "Internet_TimeH")
+
+data_scaled <- data_mfa %>% select(Grocery_CostPM, Dist_TravelledPM, TV_PC_WatchtimePD, New_Clothes_PM, Internet_TimeH) %>% 
+  scale(center = T, scale = T) %>% as_tibble()
+ 
+data_multi <- data_mfa %>% select(-c(names(data_scaled))) %>% bind_cols(data_scaled)
+  
+data_multi %>% glimpse()
+```
+
+
+
+```{r}
+multi_res <- MFA(data_mfa, group = c(3,2,3,2,1,5,5,5), type = c(rep('n',4),rep('c',3), 's'), ncp = 26, 
+    name.group = c('Body','heat', 'trans','waste','Sex', 'cook','waste','groc'), graph = F)
+```
+
+
+```{r}
+factoextra::fviz_mfa_var(multi_res, "quali.var", col.var = "contrib", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             col.var.sup = "violet", repel = TRUE,
+             geom = c("point", "text"))
+
+```
+
+The above plot helps us visualize the contribution of each categorical variable corresponding to the Dimensions 1 & 2. It is to be noted that the majority of the variables are clustered close to the origin but not lying on it, which shows that each feature has something to contribute to the Dimensions. As we move towards the far end of the dimensions, we can see a couple of variables that are higlighted in light-dark orange which signifies that they are the major contributors of the corresponding dimensions. 
+
+```{r}
+factoextra::fviz_mfa_var(multi_res, 'quali.var', col.var = "cos2", repel = T)
+```
+
+The above plot helps us visualize the cosine simularity of each categorical variable corresponding to the Dimensions 1 & 2. As we see from the plot above, majority of the variables are in dark blue which shows that most of them are not similar. There are certain variables which belong to a specific type, for example, `Vehicle types` such as petrol, diesel, lpg are similar with about 50% similarity and the `Transportation Mode` such as private, walk/bicycle are close and seem to have above 80% similarity. 
+
+```{r}
+multi_dims <- data.frame(multi_res$group$coord[,1:2])
+multi_dims %>% ggplot() +
+  ggrepel::geom_text_repel(aes(label = rownames(multi_dims), x = Dim.1, y = Dim.2 )) #
+```
+
+The above plot helps us visualize the contribution of each group with respect to the dimensions. The further away the dimensions are, the more contribution they have in explaining the variance. As we can see, only Transport and Waste.1 are contributing to the Dimension1 while the other groups are contributing more to the Dimension2. 
+
+```{r}
+corrplot::corrplot(multi_res$group$correlation)
+```
+
+The above heatmap helps us visualize the contribution of each group with respect to the Dimensions. As observed from the scree plot almost all features contribute to some degree to all the dimensions.
+
+```{r}
+factoextra::fviz_contrib(multi_res, "quanti.var", repel = T)
+
+```
+
+The plot above helps us visualize the contribution of Quantitative variables. It resonates well with the heatmap above. As observed in the heatmap, Transporation contributes more to the dimension 1. 
+
+```{r}
+factoextra::fviz_contrib(multi_res, "quali.var", repel = T)
+```
+
+The plot above helps us visualize the contribution of Qualitative variables. Apparently Preferred transport and Vehicle type are the top contributors for Dim1 which belongs to the Transportation group. 
+
+
+
+#Model Training
+
+##Linear models
+
+```{r, train_test_split}
+set.seed(1234)
+library(rsample)
+data_split <- initial_split(data, strata = 'Vehicle_Type', prop = 0.85)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+
+```{r, scale_transformation}
+col_names <- c("Grocery_CostPM", "Dist_TravelledPM", "TV_PC_WatchtimePD", "New_Clothes_PM", "Internet_TimeH" )
+var_mean <- as.vector(apply(train_data[,col_names], 2, mean))
+var_sd <- as.vector(apply(train_data[,col_names], 2, sd))
+df_train  <- train_data[,col_names] %>% scale(center = var_mean, scale = var_sd) %>% 
+  as.data.frame() %>% tibble::as_tibble() %>%
+  bind_cols(train_data %>% select(-col_names))
+
+df_train %>% glimpse()
+
+var_mean
+var_sd
+```
+
+
+```{r, test_data}
+df_test <- test_data[,col_names] %>% scale(center = var_mean, scale = var_sd) %>%
+  as.data.frame() %>% tibble::as_tibble() %>%
+  bind_cols(test_data%>% select(-col_names))
+
+df_test %>% glimpse()
+
+# write.csv(df_test,"testing_data_oh.csv")
+```
+
+
+```{r, linear_models}
+set.seed(1234)
+# numerical variables only 
+numerical_only <- df_train %>% select(where(is.numeric))
+lm_numeric <- lm(CarbonEmission~., data = numerical_only)
+
+# Categorical variables only
+categorical_only <- df_train %>% select(where(is.character), CarbonEmission)
+lm_categorical <- lm(CarbonEmission~., data = categorical_only)
+
+# All categorical and numerical columns
+lm_all <- lm(CarbonEmission~., data = df_train)
+
+# All categorical main effects and pairwise interactions of numerical variables
+lm_lin_cat_pairwise <- lm(CarbonEmission~ (.)^2 , data = df_train)
+
+#Interaction between vehicletype, Transport, Distance travelled with the rest of the features
+lm_Vehic_trans_dist <- lm(CarbonEmission~Vehicle_Type*(.)+Transport *(.)+Dist_TravelledPM *(.), data = df_train)
+
+# Non-linear affects of the above variables combined
+lm_nonlin_vtd <- lm(CarbonEmission~(Vehicle_Type+Transport+Dist_TravelledPM)^2*(.), data = df_train)
+```
+
+
+```{r, model_summary}
+model_summary <- tibble()
+for (i in c('lm_numeric', 'lm_categorical', 'lm_all', 'lm_lin_cat_pairwise', 'lm_Vehic_trans_dist', 'lm_nonlin_vtd')){
+  result <- broom::glance(get(i))
+  rmse <- modelr::rmse(get(i), df_test)
+  model_summary <- bind_rows(model_summary, tibble(Model = i, rmse = rmse, result))
+}
+```
+
+
+```{r, lm_metrics}
+model_summary %>% select(Model, df, r.squared, AIC, BIC) %>% 
+  pivot_longer(!c("Model", "df")) %>% 
+  ggplot(mapping = aes(x=Model, y=value, group=value)) +
+  labs(title = "Model Comparison", x = "Model", y = "Value") +
+  geom_point()+
+  facet_wrap(~name, scales = "free_y") +  
+  theme(axis.text.x = element_text(angle = 45))
+```
+
+
+```{r, rmse_plot}
+model_summary %>% ggplot(mapping = aes(Model, rmse, group=1))+
+  geom_line()+geom_point() + theme_minimal()+  
+  geom_point(data = model_summary[which.min(model_summary$rmse), , drop = FALSE],color = "red", size = 3) +
+  theme(axis.text.x = element_text(angle = 45))
+```
+
+
+```{r}
+model_1 <- lm_nonlin_vtd %>% summary()
+
+tidy_coeffs <- broom::tidy(model_1) %>%
+  mutate(upper = estimate + `std.error`, lower = estimate - `std.error`) %>% filter(p.value < 0.001)
+
+tidy_coeffs %>% GGally::ggcoef()
+
+
+```
+
+
+```{r}
+lm_lin_cat_pairwise %>% summary() %>% broom::tidy() %>%
+  mutate(upper = estimate + `std.error`, lower = estimate - `std.error`) %>% 
+  filter(p.value < 0.001) %>% 
+  GGally::ggcoef()
+
+
+```
+
+
+```{r, tune_params}
+library(caret)
+set.seed(12345)
+my_ctrl<- trainControl(method = 'repeatedcv', number = 10, repeats = 5, savePredictions = T)
+
+my_metric <- 'RMSE'
+```
+
+
+```{r, model1, eval=FALSE}
+set.seed(1256)
+
+mod_1 <- train(formula(lm_nonlin_vtd), method='lm', trControl = my_ctrl, 
+               metric= my_metric,
+               data = df_train)
+mod_1 %>% readr::write_rds("model_1.rds")
+```
+
+
+```{r, model1_reload}
+mod_1 <- readr::read_rds("model_1.rds")
+plot(varImp(mod_1), top = 30)
+```
+
+
+```{r, model2, eval=FALSE}
+set.seed(1256)
+
+mod_2 <- train(formula(lm_lin_cat_pairwise), method='lm', trControl = my_ctrl,
+               metric= my_metric,
+               data = df_train)
+mod_2 %>% readr::write_rds("model_2.rds")
+```
+
+
+```{r, model2_reload}
+mod_2 <- readr::read_rds("model_2.rds")
+plot(varImp(mod_2), top = 30)
+```
+
+
+```{r, model3, eval=F}
+set.seed(1256)
+
+glm_1_def <- train(formula(lm_nonlin_vtd), method='glmnet', trControl = my_ctrl,
+               metric= my_metric,
+               data = df_train)
+lambda_grid <- exp(seq(log(min(glm_1_def$results$lambda)),
+                          log(max(glm_1_def$results$lambda)), length.out = 25))
+enet_grid <- expand.grid(alpha = seq(0.1,1, by=0.1),
+                         lambda = lambda_grid)
+
+glm_1 <- train(formula(lm_nonlin_vtd), method='glmnet', trControl = my_ctrl,
+               metric= my_metric, tuneGrid = enet_grid,
+               data = df_train)
+glm_1 %>% readr::write_rds("glm_1.rds")
+```
+
+
+```{r, model3_reload}
+mod_3 <- readr::read_rds("glm_1.rds")
+plot(varImp(mod_3),top = 30)
+```
+
+
+
+```{r, model4, eval=FALSE}
+set.seed(1256)
+
+glm_2_def <- train(formula(lm_lin_cat_pairwise), method='glmnet', trControl = my_ctrl, 
+               metric= my_metric,
+               data = df_train)
+
+lambda_grid <- exp(seq(log(min(glm_2_def$results$lambda)),
+                          log(max(glm_2_def$results$lambda)), length.out = 25))
+enet_grid_2 <- expand.grid(alpha = seq(0.1,1, by=0.1),
+                         lambda = lambda_grid)
+
+glm_2 <- train(formula(lm_lin_cat_pairwise), method='glmnet', trControl = my_ctrl,
+               metric= my_metric, tuneGrid = enet_grid_2,
+               data = df_train)
+# glm_2 %>% readr::write_rds("glm_2.rds")
+```
+
+
+```{r, model4_reload}
+mod_4 <- readr::read_rds("glm_2.rds")
+plot(varImp(mod_4), top = 35)
+```
+
+
+
+```{r, model5, eval=FALSE}
+set.seed(12345)
+
+
+# my_ctrl_1<- trainControl(method = 'repeatedcv', number = 10, repeats = 5, savePredictions = T, verboseIter = T)
+
+rf_grid <- expand.grid(mtry = c(1:7),
+                          KEEP.OUT.ATTRS = FALSE,
+                        stringsAsFactors = FALSE)
+
+rf_tune <- caret::train(CarbonEmission ~ ., method = 'rf',
+                      data = df_train,
+                      importance = TRUE,
+                      metric = my_metric,
+                      trControl = my_ctrl,
+                      tuneGrid = rf_grid)
+rf_tune %>% readr::write_rds("rf_tune.rds")
+```
+
+
+```{r, model5_reload}
+mod_5 <- readr::read_rds("rf_tune.rds")
+plot(varImp(mod_5), top=35)
+```
+
+
+```{r, model6, eval=FALSE}
+set.seed(12233)
+
+df_train_1 = readr::read_csv('train_data_oh.csv', show_col_types = F)
+xgb_default <- train( CarbonEmission ~ .,
+                      data = df_train_1,
+                      method = 'xgbTree',
+                      metric = my_metric,
+                      trControl = my_ctrl,
+                      verbosity = 0,
+                      nthread = 1)
+
+xgb_grid <- expand.grid(nrounds = c(25, 50, 100, 200, 400, 800,1000),
+                        max_depth = c(3, 6, 9, 12),
+                        eta =  c(0.0625*xgb_default$bestTune$eta,
+                                 0.125*xgb_default$bestTune$eta,
+                                 1.0*xgb_default$bestTune$eta),
+                        gamma = xgb_default$bestTune$gamma,
+                        colsample_bytree = xgb_default$bestTune$colsample_bytree,
+                        min_child_weight = xgb_default$bestTune$min_child_weight,
+                        subsample = xgb_default$bestTune$subsample)
+```
+
+
+```{r, model6_tune, eval=F}
+xgb_tune <-  train( CarbonEmission ~ ., 
+                   data = df_train_1, 
+                   method = 'xgbTree', 
+                   metric = my_metric, 
+                   tuneGrid = xgb_grid,
+                   trControl = my_ctrl, 
+                   verbosity = 0,
+                   nthread = 4)
+xgb_tune %>% readr::write_rds("xgb_tune_oh.rds")
+```
+
+
+```{r, model6_reload}
+mod_6 <- readr::read_rds("xgb_tune.rds")
+plot(mod_6, xTrans=log)
+```
+
+
+```{r, model6_varimp}
+
+plot(varImp(mod_6), top=35)
+```
+
+
+```{r, model7,eval=FALSE}
+set.seed(1234543)
+nnet_grid <- expand.grid(size=c(5,9,13,17,21), decay=exp(seq(-6,0,length.out=11)))
+nnet_tune <- train(CarbonEmission~., method='nnet', metric = my_metric, trControl = my_ctrl,
+               trace=F, tuneGrid = nnet_grid, preProcess=c('center', 'scale'), data = df_train)
+nnet_tune %>% readr::write_rds("nnet_tune.rds")
+```
+
+
+```{r, model7_reload}
+mod_7 <- readr::read_rds("nnet_tune.rds")
+plot(mod_7, xTrans=log)
+```
+
+
+```{r}
+calculate_metrics <- function(model, df_test) {
+  predictions <- predict(model, newdata = df_test %>% select(-CarbonEmission))
+  
+  mse <- mean((df_test$CarbonEmission - predictions)^2)
+  rmse <- sqrt(mse)
+  mae <- mean(abs(df_test$CarbonEmission - predictions))
+  
+  return(data.frame(MSE = mse, RMSE = rmse, MAE = mae))
+}
+
+model_list <- list(lin_mod_poly = mod_1, lin_mod_pairwise = mod_2,
+                   glmnet_poly = mod_3, glmnet_pairwise = mod_4,
+                   rf_tuned = mod_5, xgb_tune = mod_6,
+                   nnet_tune = mod_7)
+
+results <- lapply(model_list, calculate_metrics, df_test = df_test)
+
+results_df <- do.call(rbind, results)
+
+results_df <- results_df %>% rownames_to_column('Model')
+
+```
+
+```{r}
+results_df %>%
+  tibble::rowid_to_column() %>%
+  pivot_longer(c( 'MAE', 'RMSE')) %>%
+  ggplot(aes(x = Model, y = value, color = name, group = name)) +
+  geom_point() +
+  geom_line(size = 1.2) +
+  labs(title = "Model Evaluation Metrics",
+       x = "Model",
+       y = "Metric Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45))+
+  facet_wrap(~name, scales = 'free_y')
+
+```
+
+
+#Interpretation
+
+```{r}
+best_preds <- predict(mod_2, df_test %>% select(-CarbonEmission))
+
+df_test %>% select(Vehicle_Type, Transport,AirTravel_Freq,Heating_Source, CarbonEmission) %>% mutate('Preds'=best_preds) %>% group_by(Vehicle_Type, Transport, AirTravel_Freq, Heating_Source) %>% summarise(rmse = caret::RMSE(Preds, CarbonEmission),.groups = 'drop') %>%
+  arrange(rmse) %>%  
+  ggplot(mapping = aes(x=interaction(Vehicle_Type, Transport, sep = '_'), y=rmse, fill=AirTravel_Freq)) + 
+  geom_col(position = 'dodge')+
+  ggtitle("Hardest to predict variables for the best model")+
+  facet_wrap(~Heating_Source, scales = 'free_y')+
+  theme(axis.text.x = element_text(angle = 45))
+  
+```
+
+
+```{r}
+
+df_test %>% select(Dist_TravelledPM, Waste_CountPW,Waste_bag_Size,Body_Type, CarbonEmission) %>% mutate('Preds'=best_preds) %>% group_by(Dist_TravelledPM, Waste_CountPW,Waste_bag_Size,Body_Type) %>% summarise(rmse = caret::RMSE(Preds, CarbonEmission),.groups = 'drop') %>%
+  arrange(rmse) %>%  
+  ggplot(mapping = aes(x=interaction(Waste_bag_Size, Body_Type, sep = '_'), y=rmse, fill=Waste_CountPW)) + 
+  geom_col(position = 'dodge')+
+  ggtitle("Hardest to predict variables for the best model")+
+  # facet_wrap(~Heating_Source, scales = 'free_y')+
+  theme(axis.text.x = element_text(angle = 45))
+  
+
+```
+
+There's clear variability in the model's prediction error across different combinations of 'Waste_bag_Size' and 'Body_Type'. This suggests that certain combinations are consistently harder or easier for the model to predict.
+
+The combination with the highest rmse is "extra_large_obese", indicating that the model finds this particular combination most challenging to predict accurately.
+
+
+
+```{r}
+residaul_plot <- data.frame(actual = df_test$CarbonEmission, predictions = best_preds)
+
+residaul_plot$residuals <- df_test$CarbonEmission-best_preds
+residaul_plot$average <- with(residaul_plot, (actual + predictions) / 2)
+residaul_plot$difference <- with(residaul_plot, actual - predictions)
+mean_diff <- mean(residaul_plot$difference)
+sd_diff <- sd(residaul_plot$difference)
+
+# Bland-Altman Plot
+ggplot(residaul_plot, aes(x = average, y = difference)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = mean_diff, color = "blue") +
+  geom_hline(yintercept = mean_diff + 1.96 * sd_diff, linetype = "dashed", color = "red") +
+  geom_hline(yintercept = mean_diff - 1.96 * sd_diff, linetype = "dashed", color = "red") +
+  labs(x = "Average of actual and predicted", y = "Difference (Actual - Predicted)",
+       title = "Bland-Altman (Residual vs Predicted) Plot")
+
+```
+
+Each point represents a pair of measurements (the difference versus the average of actual and predicted).
+Blue Line represents the mean difference. Ideally, this line should be close to zero.
+Red Dashed Lines represent the limits of agreement (± 1.96 * SD), which are expected to contain 95% of the differences. If these lines are too wide or the points are too scattered, it may indicate issues with prediction accuracy or consistency.
+
+
+```{r}
+library(pdp)
+
+interaction_pdp <- partial(
+  mod_2,
+  pred.var = c("Vehicle_Type", "Transport"),
+  train = df_train,
+  grid.resolution = 10  )
+
+interaction_pdp %>%
+  ggplot() +
+  geom_tile(aes(x = Vehicle_Type, y = Transport, fill = yhat)) +  # Map x, y, and fill
+  geom_contour(aes(x = Vehicle_Type, y = Transport, z = yhat), colour = "white", bins = 10) +  # Add x, y, and z
+  scale_fill_viridis_c(option = "C") +  # Use a color gradient from the viridis package
+  labs(
+    title = "Partial Dependence Plot for Interaction",
+    x = "Vehicle Type",  # Adjusted for your specific feature names
+    y = "Transport",
+    fill = "Predicted Outcome"  )+
+  theme(axis.text.x = element_text(angle = 45))
+
+
+```
+
+
+For the "private" transport category, the type of vehicle appears to have a substantial impact on the predicted outcome. Particularly, "PMM" and "publicTransport" vehicle types seem to lead to the highest predicted outcomes within this category.
+In contrast, for the "public" transport category, there is less variability in the predicted outcomes across different vehicle types. This could suggest that for public transport, the type of vehicle might not be as significant a predictor as it is for private transport.
+The "walk/bicycle" category shows medium-level predictions across all vehicle types, indicating that when this mode of transport is chosen, the vehicle type might have little to no influence on the predicted outcome.
+
+
+```{r}
+library(pdp)
+
+interaction_2 <- partial(
+  mod_2,
+  pred.var = c("Dist_TravelledPM", "Waste_CountPW"),
+  train = df_train,
+  grid.resolution = 10  )
+
+interaction_2 %>%
+  ggplot() +
+  geom_tile(aes(x = Dist_TravelledPM, y = Waste_CountPW, fill = yhat)) +  # Map x, y, and fill
+  geom_contour(aes(x = Dist_TravelledPM, y = Waste_CountPW, z = yhat), colour = "white", bins = 10) +  # Add x, y, and z
+  scale_fill_viridis_c(option = "C") +  # Use a color gradient from the viridis package
+  labs(
+    title = "Partial Dependence Plot for Interaction",
+    x = "Distance Travelled Per month",  # Adjusted for your specific feature names
+    y = "Waste bag count",
+    fill = "Predicted Outcome"  )+
+  theme(axis.text.x = element_text(angle = 45))
+
+
+```
+
+There appears to be a trend where increasing 'Distance Travelled Per Month' correlates with higher predicted outcomes. This trend is particularly pronounced at higher 'Waste Bag Count' values.
+
+The fact that the plot changes distinctly along both the 'Distance Travelled Per Month' and 'Waste Bag Count' axes suggests that both these features are important in predicting the outcome.
+
+
