@@ -1,11 +1,78 @@
-# Carbon-Foot-Print-Forecaster
-The topic of interest for our project is ‘Carbon Footprint Estimation’. This project focuses on estimating and analyzing the carbon footprint associated with various entities, including individuals, organizations, events, and products. A carbon footprint measures total greenhouse gas emissions resulting from human activities. The estimation of carbon footprints plays a vital role in understanding and mitigating climate change by identifying key areas where emissions can be reduced. The subject of carbon footprint estimation is particularly intriguing to us as it has a direct impact on environmental sustainability. By understanding and mitigating carbon emissions, we contribute to environmental sustainability and combat climate change.
-Our goal is to develop a predictive model for estimating carbon footprints based on regular activities. We aim to train and compare multiple models to identify the most accurate predictor while gaining insights into the significant contributors to carbon emissions and essentially the areas of improvement. We are aiming to possibly host the best model on a website for real-time predictions to empower consumers to make sustainable choices.
+# Carbon Footprint Forecaster
 
+## Overview
 
-### Data Assumptions and Limitations:
-1. The data is synthetically generated based on weights derived from different sources. So, the sources are assumed to be credible, hence the data.
-2. The accuracy of the model's predictions will depend heavily on the quality and representativeness of the data.
-### Model Assumptions and Limitations:
-1. The models assume that the features (data points) are independent of each other.
-2. The model assumes that the underlying relationships between features and the target variable remain constant over time.
+This project provides a robust, high-accuracy predictive model to estimate an individual's **Carbon Footprint** (total greenhouse gas emissions expressed as CO₂ equivalent) based on daily behavioral data.
+
+The goal was to transition from complex, slow estimation methods to a **real-time prediction tool** hosted online, empowering users to understand their environmental impact and make actionable, sustainable choices.
+
+---
+
+## Key Features & Technical Highlights
+
+| Feature | Description | 
+| :----- | :----- | 
+| **High Accuracy** | Achieved a state-of-the-art predictive performance with a **Mean Absolute Error (MAE) of ~64** on the test set. | 
+| **Model Optimization** | Comparative analysis across 7+ models (Linear, Elastic Net, XGBoost, etc.) led to the selection of a highly interpretable **Linear Model with Pairwise Interactions** as the optimal predictor. | 
+| **Advanced EDA** | Utilized R's **Factor Analysis of Mixed Data (FAMD)** and **Multi-Factor Analysis (MFA)** to uncover non-linear relationships and prioritize the most influential features. | 
+| **Data-Driven Insights** | Identified **Transport, Air Travel Frequency, and Vehicle Type** as the strongest drivers of carbon emissions, guiding model feature engineering. | 
+| **Deployment** | Implemented the final model via a **Streamlit application** for a user-friendly, real-time prediction interface (live deployment link available in repository). | 
+
+---
+
+## Technologies Used
+
+The entire data preparation and modeling pipeline was executed within the R ecosystem, with deployment handled via Python.
+
+### **R/RStudio (Modeling & Analytics)**
+
+* `caret` / `glmnet`: Model training, cross-validation, and Elastic Net implementation.
+
+* `FactoMineR`: Execution of FAMD and MFA for dimension reduction and categorical variable analysis.
+
+* `tidyverse` (e.g., `ggplot2`): Data cleaning, preprocessing, and generating the exploratory plots (Partial Dependence Plots, Residual Plots).
+
+### **Python (Deployment)**
+
+* `Streamlit`: Web application framework for the real-time prediction interface.
+
+---
+
+## Methodology and Modeling Insights
+
+### 1. Data Analysis (R, FAMD, & MFA)
+
+Rigorous Exploratory Data Analysis was performed on a synthesized dataset (10,000 rows, 20 features) covering aspects like diet, waste, and distance traveled.
+
+* **Key Findings:** The analysis confirmed that **Transport Type** and **Distance Travelled Per Month** are the largest contributors to overall variance and carbon output.
+
+* **Interaction Term Importance:** Plot analysis revealed the non-additive effect of combining features (e.g., using a **private petrol vehicle** has a significantly higher emission impact than the sum of its parts).
+
+### 2. Model Training & Selection
+
+A series of linear and non-linear models were tested to find the best balance between predictive power and interpretability.
+
+| Model | MAE (Mean Absolute Error) | RMSE (Root Mean Squared Error) | Notes | 
+| :----- | :----- | :----- | :----- | 
+| **LM w/ Pairwise Interactions** | **~64** | **~100** | **Selected Model (Best Performer)**. Highly accurate and offers clear coefficients for auditing. | 
+| XGBoost (Tuned) | ~110 | ~190 | Strong performance, but less interpretable than the final choice. | 
+| Neural Network (Tuned) | ~125 | ~220 | Overly complex for the required accuracy gain. | 
+
+### 3. Feature Importance (Elastic Net)
+
+Elastic Net regularization was used to confirm feature importance and prevent overfitting. The analysis consistently prioritized interaction terms:
+
+* `Dist_TravelledPM:Vehicle_Typeelectric`
+
+* `AirTravel_Freqvery frequently`
+
+* `Body_Typeobese:Vehicle_Typeelectric`
+
+---
+
+## Getting Started
+
+1. **Clone the Repository:**
+
+   ```bash
+   git clone [https://github.com/sai-vivek108/Carbon-Foot-Print-Forecaster.git](https://github.com/sai-vivek108/Carbon-Foot-Print-Forecaster.git)
